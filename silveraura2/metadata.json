@@ -1,0 +1,8 @@
+{
+  "name": "Silver Aura – 925 Sterling Silver Jewellery",
+  "description": "Luxury handcrafted 925 sterling silver rings, necklaces, earrings, bracelets, and bespoke sets. Made with timeless elegance and modern craftsmanship.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
