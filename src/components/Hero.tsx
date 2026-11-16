@@ -1,19 +1,20 @@
 import React from 'react';
 import { ArrowRight, ShieldCheck, Sparkles, Truck, RefreshCw } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
-import { useAdmin } from '../context/AdminContext';
 import { HERO_IMAGE } from '../data/products';
 
 export const Hero: React.FC = () => {
-  const { navigateTo } = useShop();
-  const { websiteContent } = useAdmin();
+  const { navigateTo, homepageContent } = useShop();
 
-  const heroImageSrc = websiteContent?.heroImage || HERO_IMAGE;
-  const heroEyebrow = websiteContent?.heroSubtitle || '925 Sterling Silver Atelier';
-  const heroTitle = websiteContent?.heroTitle || 'Pure Silver, Timeless Allure.';
-  const heroDesc = websiteContent?.heroDescription || 'Sculpted from certified 925 sterling silver and finished with mirror rhodium plating. Designed for effortless modern living, from Karachi evenings to everyday rituals.';
-  const primaryCta = websiteContent?.heroCtaText || 'Shop Collection';
-  const secondaryCta = websiteContent?.heroSecondaryCtaText || 'Bridal & Gift Sets';
+  const heroImageSrc = homepageContent.heroImage || HERO_IMAGE;
+  const heroEyebrow = homepageContent.heroSubtitle || '925 Sterling Silver Atelier';
+  const heroTitle = homepageContent.heroTitle || 'Pure Silver, Timeless Allure.';
+  const heroTitleItalic = homepageContent.heroTitleItalic?.trim() || '';
+  const heroDesc =
+    homepageContent.heroDescription ||
+    'Sculpted from certified 925 sterling silver and finished with mirror rhodium plating. Designed for effortless modern living, from Karachi evenings to everyday rituals.';
+  const primaryCta = homepageContent.heroCtaText || 'Shop Collection';
+  const secondaryCta = homepageContent.heroSecondaryCtaText ?? 'Bridal & Gift Sets';
 
   return (
     <section className="relative overflow-hidden bg-[#FAF8F5]">
@@ -29,6 +30,12 @@ export const Hero: React.FC = () => {
               </span>
               <h1 className="font-serif-luxury text-4xl sm:text-5xl lg:text-6xl text-[#1C1917] font-normal leading-[1.08] tracking-tight text-balance">
                 {heroTitle}
+                {heroTitleItalic && (
+                  <>
+                    {' '}
+                    <span className="italic font-light">{heroTitleItalic}</span>
+                  </>
+                )}
               </h1>
             </div>
 
@@ -45,12 +52,14 @@ export const Hero: React.FC = () => {
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </button>
 
-              <button
-                onClick={() => navigateTo('shop', 'Jewellery Sets')}
-                className="py-3.5 px-6 border border-[#D6CEC5] text-[#1C1917] text-xs uppercase tracking-[0.16em] font-medium hover:bg-[#F4EFEB] transition-colors flex items-center justify-center cursor-pointer"
-              >
-                {secondaryCta}
-              </button>
+              {secondaryCta && (
+                <button
+                  onClick={() => navigateTo('shop', 'Jewellery Sets')}
+                  className="py-3.5 px-6 border border-[#D6CEC5] text-[#1C1917] text-xs uppercase tracking-[0.16em] font-medium hover:bg-[#F4EFEB] transition-colors flex items-center justify-center cursor-pointer"
+                >
+                  {secondaryCta}
+                </button>
+              )}
             </div>
 
             <div className="pt-4 flex items-center gap-6 text-xs text-[#78716C]">

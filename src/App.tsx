@@ -1,6 +1,6 @@
 import React from 'react';
 import { ShopProvider, useShop } from './context/ShopContext';
-import { AdminProvider, useAdmin } from './context/AdminContext';
+import { AdminProvider } from './context/AdminContext';
 import { AnnouncementBar } from './components/AnnouncementBar';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
@@ -15,6 +15,10 @@ import { QuickViewModal } from './components/QuickViewModal';
 import { SizeGuideModal } from './components/SizeGuideModal';
 import { CheckoutModal } from './components/CheckoutModal';
 import { Toast } from './components/Toast';
+import {
+  PromotionalBannerStrip,
+  PromotionalPopupModal,
+} from './components/PromotionalBannerSection';
 
 import { ShopPage } from './pages/ShopPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
@@ -23,19 +27,14 @@ import { ContactPage } from './pages/ContactPage';
 import { FAQPage } from './pages/FAQPage';
 import { ShippingPolicyPage } from './pages/ShippingPolicyPage';
 
-import { AdminLoginPage } from './admin/AdminLoginPage';
-import { AdminLayout } from './admin/AdminLayout';
+import { ProtectedAdminRoute } from './admin/ProtectedAdminRoute';
 
 const MainAppRouter: React.FC = () => {
   const { activePage } = useShop();
-  const { isAuthenticated } = useAdmin();
 
-  // If currently routed to Admin Portal
+  // If currently routed to Admin Portal (/admin/*)
   if (activePage === 'admin') {
-    if (!isAuthenticated) {
-      return <AdminLoginPage />;
-    }
-    return <AdminLayout />;
+    return <ProtectedAdminRoute />;
   }
 
   // Customer-Facing Storefront
@@ -52,8 +51,10 @@ const MainAppRouter: React.FC = () => {
         {activePage === 'home' && (
           <>
             <Hero />
+            <PromotionalBannerStrip placement="home_banner" />
             <CategorySection />
             <HomeShowcase />
+            <PromotionalBannerStrip placement="collection_spotlight" />
             <BrandStory />
             <ReviewsSection />
           </>
@@ -76,6 +77,7 @@ const MainAppRouter: React.FC = () => {
       <QuickViewModal />
       <SizeGuideModal />
       <CheckoutModal />
+      <PromotionalPopupModal />
       <Toast />
     </div>
   );

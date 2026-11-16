@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   Product,
   CategoryItem,
@@ -9,29 +9,89 @@ import {
   StoreSettings,
   AdminSection,
   OrderStatus,
+  AdminUserProfile,
+  DashboardOverviewData,
 } from '../types';
-import { PRODUCTS } from '../data/products';
-import {
-  INITIAL_CATEGORIES,
-  INITIAL_ORDERS,
-  INITIAL_CUSTOMERS,
-  INITIAL_COUPONS,
-  INITIAL_WEBSITE_CONTENT,
-  INITIAL_STORE_SETTINGS,
-} from '../data/adminSeedData';
+import { supabase, isSupabaseConfigured, supabaseConfigError } from '../lib/supabase';
+import { fetchDashboardOverview } from '../services/dashboardService';
+
+const VALID_ADMIN_SECTIONS: AdminSection[] = [
+  'dashboard',
+  'products',
+  'categories',
+  'orders',
+  'customers',
+  'inventory',
+  'coupons',
+  'content',
+  'settings',
+];
+
+function parseAdminSectionFromLocation(): AdminSection {
+  const path = window.location.pathname.toLowerCase();
+  if (path.startsWith('/admin/')) {
+    const seg = path.replace('/admin/', '').split('/')[0] as AdminSection;
+    if (VALID_ADMIN_SECTIONS.includes(seg)) {
+      return seg;
+    }
+  }
+
+  const hash = window.location.hash.toLowerCase();
+  if (hash.startsWith('#admin/')) {
+    const sec = hash.replace('#admin/', '').split('?')[0] as AdminSection;
+    if (VALID_ADMIN_SECTIONS.includes(sec)) {
+      return sec;
+    }
+  }
+
+  return 'dashboard';
+}
+
+const EMPTY_WEBSITE_CONTENT: WebsiteContent = {
+  heroSubtitle: '',
+  heroTitle: '',
+  heroTitleItalic: '',
+  heroDescription: '',
+  heroImage: '',
+  announcementText: '',
+};
+
+const EMPTY_STORE_SETTINGS: StoreSettings = {
+  storeName: 'Silver Aura',
+  storeEmail: '',
+  contactPhone: '',
+  storeAddress: '',
+  currency: 'PKR',
+  standardShippingCharge: 250,
+  freeShippingThreshold: 5000,
+  lowStockThreshold: 5,
+};
 
 interface AdminContextType {
-  // Auth
+  // Supabase status & Auth
+  isSupabaseReady: boolean;
+  supabaseError: string | null;
+  authLoading: boolean;
   isAuthenticated: boolean;
-  adminUser: { name: string; email: string; role: string } | null;
-  login: (email: string, pass: string) => { success: boolean; message: string };
-  logout: () => void;
+  adminUser: AdminUserProfile | null;
+  login: (email: string, pass: string) => Promise<{ success: boolean; message: string }>;
+  logout: () => Promise<void>;
 
-  // Active section
+  // Navigation
   activeSection: AdminSection;
   setActiveSection: (sec: AdminSection) => void;
 
-  // Products
+  // Stage 2 Dashboard Overview (real Supabase metrics)
+  dashboardOverview: DashboardOverviewData | null;
+  dashboardLoading: boolean;
+  dashboardError: string | null;
+  refreshDashboard: () => Promise<void>;
+
+  // Feedback Toast
+  adminToast: { message: string; type: 'success' | 'error' | 'info' } | null;
+  showAdminToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+
+  // Stage 3/4 Module Contracts (empty non-mock defaults until Stages 3 & 4 wire each module)
   products: Product[];
   addProduct: (product: Partial<Product>) => void;
   updateProduct: (id: string, updates: Partial<Product>) => void;
@@ -39,569 +99,321 @@ interface AdminContextType {
   toggleProductStatus: (id: string) => void;
   updateProductStock: (id: string, newStock: number) => void;
 
-  // Categories
   categories: CategoryItem[];
   addCategory: (cat: { name: string; tagline: string; image: string; active?: boolean }) => void;
   updateCategory: (id: string, updates: Partial<CategoryItem>) => void;
   deleteCategory: (id: string) => void;
   toggleCategoryStatus: (id: string) => void;
 
-  // Orders
   orders: OrderDetails[];
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
   deleteOrder: (orderId: string) => void;
 
-  // Customers
   customers: Customer[];
   addCustomer: (cust: Omit<Customer, 'id' | 'totalOrders' | 'totalSpent' | 'registrationDate'>) => void;
   updateCustomer: (id: string, updates: Partial<Customer>) => void;
   deleteCustomer: (id: string) => void;
 
-  // Coupons
   coupons: Coupon[];
   addCoupon: (coup: Omit<Coupon, 'id' | 'usageCount'>) => void;
   updateCoupon: (id: string, updates: Partial<Coupon>) => void;
   deleteCoupon: (id: string) => void;
   toggleCouponStatus: (id: string) => void;
 
-  // Content
   websiteContent: WebsiteContent;
   updateWebsiteContent: (updates: Partial<WebsiteContent>) => void;
 
-  // Settings
   storeSettings: StoreSettings;
   updateStoreSettings: (updates: Partial<StoreSettings>) => void;
-
-  // Toast / Feedback in Admin
-  adminToast: { message: string; type: 'success' | 'error' | 'info' } | null;
-  showAdminToast: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 const AdminContext = createContext<AdminContextType | undefined>(undefined);
 
 export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. Auth state
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('silver_aura_admin_auth') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [authLoading, setAuthLoading] = useState<boolean>(isSupabaseConfigured);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [adminUser, setAdminUser] = useState<AdminUserProfile | null>(null);
 
-  const [adminUser, setAdminUser] = useState<{ name: string; email: string; role: string } | null>(() => {
-    return isAuthenticated
-      ? { name: 'Artisan Administrator', email: 'admin@silveraura.com', role: 'Head Curator' }
-      : null;
-  });
+  const [activeSection, setActiveSectionState] = useState<AdminSection>(
+    parseAdminSectionFromLocation
+  );
 
-  // Active section
-  const [activeSection, setActiveSectionState] = useState<AdminSection>('dashboard');
+  const [dashboardOverview, setDashboardOverview] = useState<DashboardOverviewData | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState<boolean>(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
-  const setActiveSection = (sec: AdminSection) => {
-    setActiveSectionState(sec);
-    if (window.location.pathname.startsWith('/admin') || window.location.hash.startsWith('#admin')) {
-      window.location.hash = `admin/${sec}`;
-    }
-  };
+  const [adminToast, setAdminToast] = useState<{
+    message: string;
+    type: 'success' | 'error' | 'info';
+  } | null>(null);
 
-  // Toast
-  const [adminToast, setAdminToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const showAdminToast = useCallback(
+    (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+      setAdminToast({ message, type });
+      window.setTimeout(() => setAdminToast(null), 3400);
+    },
+    []
+  );
 
-  const showAdminToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setAdminToast({ message, type });
-    setTimeout(() => setAdminToast(null), 3200);
-  };
+  const verifyAdminRecord = useCallback(
+    async (userId: string): Promise<AdminUserProfile | null> => {
+      if (!supabase) return null;
 
-  // 2. Products state (Shared with Storefront)
-  const [products, setProducts] = useState<Product[]>(() => {
-    try {
-      const saved = localStorage.getItem('silver_aura_products');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      const { data, error } = await supabase
+        .from('admin_users')
+        .select('id, user_id, email, full_name, role, is_active')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (error || !data) {
+        return null;
       }
-    } catch (e) {
-      console.warn('Failed to load products from localStorage', e);
-    }
-    return PRODUCTS.map((p, idx) => ({
-      ...p,
-      sku: p.sku || `SA-${p.category.slice(0, 3).toUpperCase()}-${100 + idx}`,
-      status: p.status || 'active',
-      salePrice: p.originalPrice ? p.price : undefined,
-      createdAt: p.createdAt || '2026-10-15',
-    }));
-  });
 
+      return {
+        id: data.id,
+        userId: data.user_id,
+        email: data.email,
+        name: data.full_name || data.email,
+        role: data.role,
+        isActive: data.is_active,
+      };
+    },
+    []
+  );
+
+  const refreshDashboard = useCallback(async () => {
+    if (!supabase || !isAuthenticated) {
+      setDashboardOverview(null);
+      return;
+    }
+
+    setDashboardLoading(true);
+    setDashboardError(null);
+
+    try {
+      const overview = await fetchDashboardOverview();
+      setDashboardOverview(overview);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Unable to load dashboard metrics from Supabase.';
+      setDashboardError(msg);
+    } finally {
+      setDashboardLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  // Restore Supabase session and listen to auth state transitions
   useEffect(() => {
-    try {
-      localStorage.setItem('silver_aura_products', JSON.stringify(products));
-    } catch (e) {
-      console.warn('Failed to persist products', e);
+    const client = supabase;
+    if (!client) {
+      setAuthLoading(false);
+      setIsAuthenticated(false);
+      setAdminUser(null);
+      return;
     }
-  }, [products]);
 
-  // 3. Categories state
-  const [categories, setCategories] = useState<CategoryItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('silver_aura_categories');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.warn('Failed to load categories', e);
-    }
-    return INITIAL_CATEGORIES;
-  });
+    let cancelled = false;
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('silver_aura_categories', JSON.stringify(categories));
-    } catch (e) {
-      console.warn('Failed to persist categories', e);
-    }
-  }, [categories]);
-
-  // 4. Orders state
-  const [orders, setOrders] = useState<OrderDetails[]>(() => {
-    try {
-      const saved = localStorage.getItem('silver_aura_orders');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.warn('Failed to load orders', e);
-    }
-    return INITIAL_ORDERS;
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('silver_aura_orders', JSON.stringify(orders));
-    } catch (e) {
-      console.warn('Failed to persist orders', e);
-    }
-  }, [orders]);
-
-  // 5. Customers state
-  const [customers, setCustomers] = useState<Customer[]>(() => {
-    try {
-      const saved = localStorage.getItem('silver_aura_customers');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.warn('Failed to load customers', e);
-    }
-    return INITIAL_CUSTOMERS;
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('silver_aura_customers', JSON.stringify(customers));
-    } catch (e) {
-      console.warn('Failed to persist customers', e);
-    }
-  }, [customers]);
-
-  // 6. Coupons state
-  const [coupons, setCoupons] = useState<Coupon[]>(() => {
-    try {
-      const saved = localStorage.getItem('silver_aura_coupons');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.warn('Failed to load coupons', e);
-    }
-    return INITIAL_COUPONS;
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('silver_aura_coupons', JSON.stringify(coupons));
-    } catch (e) {
-      console.warn('Failed to persist coupons', e);
-    }
-  }, [coupons]);
-
-  // 7. Website Content state
-  const [websiteContent, setWebsiteContent] = useState<WebsiteContent>(() => {
-    try {
-      const saved = localStorage.getItem('silver_aura_content');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn('Failed to load website content', e);
-    }
-    return INITIAL_WEBSITE_CONTENT;
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('silver_aura_content', JSON.stringify(websiteContent));
-    } catch (e) {
-      console.warn('Failed to persist website content', e);
-    }
-  }, [websiteContent]);
-
-  // 8. Store Settings state
-  const [storeSettings, setStoreSettings] = useState<StoreSettings>(() => {
-    try {
-      const saved = localStorage.getItem('silver_aura_settings');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn('Failed to load store settings', e);
-    }
-    return INITIAL_STORE_SETTINGS;
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('silver_aura_settings', JSON.stringify(storeSettings));
-    } catch (e) {
-      console.warn('Failed to persist store settings', e);
-    }
-  }, [storeSettings]);
-
-  // Sync hash routing for admin
-  useEffect(() => {
-    const handleHash = () => {
-      const hash = window.location.hash.toLowerCase();
-      if (hash.startsWith('#admin/')) {
-        const sec = hash.replace('#admin/', '').split('?')[0] as AdminSection;
-        const validSections: AdminSection[] = [
-          'dashboard', 'products', 'categories', 'orders', 'customers',
-          'inventory', 'coupons', 'content', 'settings'
-        ];
-        if (validSections.includes(sec)) {
-          setActiveSectionState(sec);
+    const syncSession = async (userId: string | null) => {
+      if (!userId) {
+        if (!cancelled) {
+          setAdminUser(null);
+          setIsAuthenticated(false);
+          setDashboardOverview(null);
+          setAuthLoading(false);
         }
+        return;
       }
-    };
-    handleHash();
-    window.addEventListener('hashchange', handleHash);
-    return () => window.removeEventListener('hashchange', handleHash);
-  }, []);
 
-  // Listen for storefront new orders event
-  useEffect(() => {
-    const handleStorefrontOrder = (e: Event) => {
-      const customEvent = e as CustomEvent<OrderDetails>;
-      if (customEvent.detail) {
-        setOrders(prev => [customEvent.detail, ...prev]);
-        // Also update or add customer
-        const custName = customEvent.detail.customerName;
-        const custEmail = customEvent.detail.email || `${custName.toLowerCase().replace(/\s+/g, '')}@client.pk`;
-        setCustomers(prev => {
-          const existing = prev.find(c => c.name.toLowerCase() === custName.toLowerCase() || c.email === custEmail);
-          if (existing) {
-            return prev.map(c => c.id === existing.id ? {
-              ...c,
-              totalOrders: c.totalOrders + 1,
-              totalSpent: c.totalSpent + customEvent.detail.total,
-              status: c.totalSpent + customEvent.detail.total > 20000 ? 'VIP' : c.status
-            } : c);
-          } else {
-            return [
-              {
-                id: `cust-${Date.now()}`,
-                name: custName,
-                email: custEmail,
-                phone: customEvent.detail.phone,
-                city: customEvent.detail.city,
-                address: customEvent.detail.address,
-                totalOrders: 1,
-                totalSpent: customEvent.detail.total,
-                registrationDate: new Date().toISOString().split('T')[0],
-                status: 'Active'
-              },
-              ...prev
-            ];
-          }
-        });
+      const profile = await verifyAdminRecord(userId);
+      if (cancelled) return;
+
+      if (!profile) {
+        await client.auth.signOut();
+        if (!cancelled) {
+          setAdminUser(null);
+          setIsAuthenticated(false);
+          setDashboardOverview(null);
+          setAuthLoading(false);
+        }
+        return;
       }
-    };
 
-    window.addEventListener('silver_aura_new_order', handleStorefrontOrder);
-    return () => window.removeEventListener('silver_aura_new_order', handleStorefrontOrder);
-  }, []);
-
-  // Auth actions
-  const login = (email: string, pass: string) => {
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPass = pass.trim();
-
-    if (cleanEmail === 'admin@silveraura.com' && cleanPass === 'Admin123') {
+      setAdminUser(profile);
       setIsAuthenticated(true);
-      setAdminUser({
-        name: 'Artisan Administrator',
-        email: 'admin@silveraura.com',
-        role: 'Head Curator',
-      });
-      try {
-        localStorage.setItem('silver_aura_admin_auth', 'true');
-      } catch {}
-      showAdminToast('Welcome back to Silver Aura Studio Management');
-      return { success: true, message: 'Authentication successful' };
-    }
-
-    return {
-      success: false,
-      message: 'Invalid credentials. Demo: admin@silveraura.com / Admin123',
+      setAuthLoading(false);
     };
-  };
 
-  const logout = () => {
+    client.auth
+      .getSession()
+      .then(({ data }) => syncSession(data.session?.user?.id ?? null))
+      .catch(() => {
+        if (!cancelled) {
+          setAdminUser(null);
+          setIsAuthenticated(false);
+          setAuthLoading(false);
+        }
+      });
+
+    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
+      void syncSession(session?.user?.id ?? null);
+    });
+
+    return () => {
+      cancelled = true;
+      authListener.subscription.unsubscribe();
+    };
+  }, [verifyAdminRecord]);
+
+  // Fetch dashboard overview once authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      void refreshDashboard();
+    }
+  }, [isAuthenticated, refreshDashboard]);
+
+  // Sync URL pathname & hash with activeSection
+  useEffect(() => {
+    const syncSectionFromUrl = () => {
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (path.startsWith('/admin') || hash.startsWith('#admin')) {
+        setActiveSectionState(parseAdminSectionFromLocation());
+      }
+    };
+
+    window.addEventListener('popstate', syncSectionFromUrl);
+    window.addEventListener('hashchange', syncSectionFromUrl);
+    return () => {
+      window.removeEventListener('popstate', syncSectionFromUrl);
+      window.removeEventListener('hashchange', syncSectionFromUrl);
+    };
+  }, []);
+
+  const setActiveSection = useCallback((sec: AdminSection) => {
+    setActiveSectionState(sec);
+    const targetPath = `/admin/${sec}`;
+    if (window.location.pathname.toLowerCase() !== targetPath) {
+      window.history.pushState(null, '', targetPath);
+    }
+  }, []);
+
+  const login = useCallback(
+    async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
+      if (!supabase) {
+        return {
+          success: false,
+          message:
+            supabaseConfigError ||
+            'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.',
+        };
+      }
+
+      const cleanEmail = email.trim();
+      if (!cleanEmail || !password) {
+        return { success: false, message: 'Please enter your admin email and password.' };
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+
+      if (error || !data.user) {
+        return {
+          success: false,
+          message: error?.message || 'Authentication failed. Please verify your credentials.',
+        };
+      }
+
+      const profile = await verifyAdminRecord(data.user.id);
+      if (!profile) {
+        await supabase.auth.signOut();
+        return {
+          success: false,
+          message:
+            'Access denied. This account does not have active Silver Aura administrator privileges.',
+        };
+      }
+
+      setAdminUser(profile);
+      setIsAuthenticated(true);
+      setActiveSectionState('dashboard');
+      window.history.pushState(null, '', '/admin/dashboard');
+      showAdminToast(`Welcome back, ${profile.name}`);
+      return { success: true, message: 'Authenticated successfully.' };
+    },
+    [showAdminToast, verifyAdminRecord]
+  );
+
+  const logout = useCallback(async () => {
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
     setIsAuthenticated(false);
     setAdminUser(null);
-    try {
-      localStorage.removeItem('silver_aura_admin_auth');
-    } catch {}
-    showAdminToast('Logged out of Admin Portal', 'info');
-    window.location.hash = 'admin/login';
-  };
+    setDashboardOverview(null);
+    setDashboardError(null);
+    setActiveSectionState('dashboard');
+    window.history.pushState(null, '', '/admin/login');
+    showAdminToast('Signed out of Silver Aura Admin', 'info');
+  }, [showAdminToast]);
 
-  // Product Actions
-  const addProduct = (p: Partial<Product>) => {
-    const newId = `sa-custom-${Date.now()}`;
-    const newSku = p.sku || `SA-${(p.category || 'JEW').slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
-    const fullProduct: Product = {
-      id: newId,
-      name: p.name || 'Untitled Silver Piece',
-      category: p.category || 'Rings',
-      price: Number(p.price) || 4500,
-      originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined,
-      salePrice: p.salePrice ? Number(p.salePrice) : undefined,
-      sku: newSku,
-      images: p.images && p.images.length > 0 ? p.images : ['/src/assets/images/category_rings_1794482387362.jpg'],
-      description: p.description || 'Artisan handcrafted solid 925 sterling silver with mirror rhodium finish.',
-      silverPurity: p.silverPurity || 'Solid 925 Sterling Silver',
-      plating: p.plating || 'Triple Rhodium Anti-Tarnish Finish',
-      stone: p.stone || 'AAA Flawless Swiss Zirconia',
-      weight: p.weight || '3.8 grams',
-      hallmark: p.hallmark || '925 Laser Inscription',
-      sizes: p.sizes && p.sizes.length > 0 ? p.sizes : ['6', '7', '8'],
-      inStock: p.stockCount !== undefined ? p.stockCount > 0 : true,
-      stockCount: p.stockCount !== undefined ? Number(p.stockCount) : 10,
-      status: p.status || 'active',
-      isFeatured: Boolean(p.isFeatured),
-      isBestSeller: Boolean(p.isBestSeller),
-      isNewArrival: true,
-      rating: 5.0,
-      reviewCount: 0,
-      careNotes: p.careNotes || [
-        'Store in the provided anti-tarnish velvet pouch',
-        'Gently wipe with microfiber polishing cloth after wear',
-      ],
-      createdAt: new Date().toISOString().split('T')[0],
-      variants: p.variants,
-    };
-
-    setProducts(prev => [fullProduct, ...prev]);
-    showAdminToast(`Product "${fullProduct.name}" created successfully`);
-  };
-
-  const updateProduct = (id: string, updates: Partial<Product>) => {
-    setProducts(prev =>
-      prev.map(p => {
-        if (p.id === id) {
-          const nextStock = updates.stockCount !== undefined ? Number(updates.stockCount) : p.stockCount;
-          return {
-            ...p,
-            ...updates,
-            stockCount: nextStock,
-            inStock: nextStock > 0,
-          };
-        }
-        return p;
-      })
-    );
-    showAdminToast('Product updated successfully');
-  };
-
-  const deleteProduct = (id: string) => {
-    setProducts(prev => prev.filter(p => p.id !== id));
-    showAdminToast('Product removed from catalog', 'info');
-  };
-
-  const toggleProductStatus = (id: string) => {
-    setProducts(prev =>
-      prev.map(p => {
-        if (p.id === id) {
-          const nextStatus = p.status === 'inactive' ? 'active' : 'inactive';
-          return { ...p, status: nextStatus };
-        }
-        return p;
-      })
-    );
-  };
-
-  const updateProductStock = (id: string, newStock: number) => {
-    setProducts(prev =>
-      prev.map(p => {
-        if (p.id === id) {
-          const validStock = Math.max(0, newStock);
-          return {
-            ...p,
-            stockCount: validStock,
-            inStock: validStock > 0,
-          };
-        }
-        return p;
-      })
-    );
-    showAdminToast('Inventory count updated');
-  };
-
-  // Category Actions
-  const addCategory = (cat: { name: string; tagline: string; image: string; active?: boolean }) => {
-    const newCat: CategoryItem = {
-      id: `cat-${Date.now()}`,
-      name: cat.name,
-      tagline: cat.tagline,
-      image: cat.image || '/src/assets/images/category_rings_1794482387362.jpg',
-      count: 0,
-      active: cat.active ?? true,
-    };
-    setCategories(prev => [...prev, newCat]);
-    showAdminToast(`Category "${cat.name}" added`);
-  };
-
-  const updateCategory = (id: string, updates: Partial<CategoryItem>) => {
-    setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
-    showAdminToast('Category updated');
-  };
-
-  const deleteCategory = (id: string) => {
-    setCategories(prev => prev.filter(c => c.id !== id));
-    showAdminToast('Category deleted', 'info');
-  };
-
-  const toggleCategoryStatus = (id: string) => {
-    setCategories(prev => prev.map(c => c.id === id ? { ...c, active: !c.active } : c));
-  };
-
-  // Order Actions
-  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
-    setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status } : o));
-    showAdminToast(`Order ${orderId} marked as ${status}`);
-  };
-
-  const deleteOrder = (orderId: string) => {
-    setOrders(prev => prev.filter(o => o.orderId !== orderId));
-    showAdminToast('Order deleted', 'info');
-  };
-
-  // Customer Actions
-  const addCustomer = (cust: Omit<Customer, 'id' | 'totalOrders' | 'totalSpent' | 'registrationDate'>) => {
-    const newCust: Customer = {
-      id: `cust-${Date.now()}`,
-      ...cust,
-      totalOrders: 0,
-      totalSpent: 0,
-      registrationDate: new Date().toISOString().split('T')[0],
-    };
-    setCustomers(prev => [newCust, ...prev]);
-    showAdminToast(`Customer "${newCust.name}" registered`);
-  };
-
-  const updateCustomer = (id: string, updates: Partial<Customer>) => {
-    setCustomers(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
-    showAdminToast('Customer profile updated');
-  };
-
-  const deleteCustomer = (id: string) => {
-    setCustomers(prev => prev.filter(c => c.id !== id));
-    showAdminToast('Customer deleted', 'info');
-  };
-
-  // Coupon Actions
-  const addCoupon = (coup: Omit<Coupon, 'id' | 'usageCount'>) => {
-    const newCoup: Coupon = {
-      id: `coup-${Date.now()}`,
-      ...coup,
-      code: coup.code.trim().toUpperCase(),
-      usageCount: 0,
-    };
-    setCoupons(prev => [newCoup, ...prev]);
-    showAdminToast(`Privilege coupon "${newCoup.code}" created`);
-  };
-
-  const updateCoupon = (id: string, updates: Partial<Coupon>) => {
-    setCoupons(prev => prev.map(cp => cp.id === id ? {
-      ...cp,
-      ...updates,
-      code: updates.code ? updates.code.trim().toUpperCase() : cp.code,
-    } : cp));
-    showAdminToast('Coupon updated');
-  };
-
-  const deleteCoupon = (id: string) => {
-    setCoupons(prev => prev.filter(cp => cp.id !== id));
-    showAdminToast('Coupon deleted', 'info');
-  };
-
-  const toggleCouponStatus = (id: string) => {
-    setCoupons(prev => prev.map(cp => cp.id === id ? {
-      ...cp,
-      status: cp.status === 'Active' ? 'Inactive' : 'Active',
-    } : cp));
-  };
-
-  // Content Actions
-  const updateWebsiteContent = (updates: Partial<WebsiteContent>) => {
-    setWebsiteContent(prev => ({ ...prev, ...updates }));
-    showAdminToast('Website content updated and published to storefront');
-  };
-
-  // Settings Actions
-  const updateStoreSettings = (updates: Partial<StoreSettings>) => {
-    setStoreSettings(prev => ({ ...prev, ...updates }));
-    showAdminToast('Store configuration saved');
-  };
+  const notifyStagePending = useCallback(
+    (moduleName: string) => {
+      showAdminToast(`${moduleName} module will connect to Supabase in the next stage.`, 'info');
+    },
+    [showAdminToast]
+  );
 
   return (
     <AdminContext.Provider
       value={{
+        isSupabaseReady: isSupabaseConfigured,
+        supabaseError: supabaseConfigError,
+        authLoading,
         isAuthenticated,
         adminUser,
         login,
         logout,
         activeSection,
         setActiveSection,
-        products,
-        addProduct,
-        updateProduct,
-        deleteProduct,
-        toggleProductStatus,
-        updateProductStock,
-        categories,
-        addCategory,
-        updateCategory,
-        deleteCategory,
-        toggleCategoryStatus,
-        orders,
-        updateOrderStatus,
-        deleteOrder,
-        customers,
-        addCustomer,
-        updateCustomer,
-        deleteCustomer,
-        coupons,
-        addCoupon,
-        updateCoupon,
-        deleteCoupon,
-        toggleCouponStatus,
-        websiteContent,
-        updateWebsiteContent,
-        storeSettings,
-        updateStoreSettings,
+        dashboardOverview,
+        dashboardLoading,
+        dashboardError,
+        refreshDashboard,
         adminToast,
         showAdminToast,
+
+        // Non-mock compatibility defaults for un-migrated Stage 3/4 files
+        products: [],
+        addProduct: () => notifyStagePending('Product management'),
+        updateProduct: () => notifyStagePending('Product management'),
+        deleteProduct: () => notifyStagePending('Product management'),
+        toggleProductStatus: () => notifyStagePending('Product management'),
+        updateProductStock: () => notifyStagePending('Inventory management'),
+        categories: [],
+        addCategory: () => notifyStagePending('Category management'),
+        updateCategory: () => notifyStagePending('Category management'),
+        deleteCategory: () => notifyStagePending('Category management'),
+        toggleCategoryStatus: () => notifyStagePending('Category management'),
+        orders: [],
+        updateOrderStatus: () => notifyStagePending('Order management'),
+        deleteOrder: () => notifyStagePending('Order management'),
+        customers: [],
+        addCustomer: () => notifyStagePending('Customer management'),
+        updateCustomer: () => notifyStagePending('Customer management'),
+        deleteCustomer: () => notifyStagePending('Customer management'),
+        coupons: [],
+        addCoupon: () => notifyStagePending('Coupon management'),
+        updateCoupon: () => notifyStagePending('Coupon management'),
+        deleteCoupon: () => notifyStagePending('Coupon management'),
+        toggleCouponStatus: () => notifyStagePending('Coupon management'),
+        websiteContent: EMPTY_WEBSITE_CONTENT,
+        updateWebsiteContent: () => notifyStagePending('Website content'),
+        storeSettings: EMPTY_STORE_SETTINGS,
+        updateStoreSettings: () => notifyStagePending('Store settings'),
       }}
     >
       {children}

@@ -13,18 +13,13 @@ import {
   ExternalLink,
   Menu,
   X,
-  Sparkles,
-  ShieldCheck,
   CheckCircle2,
   Info,
   AlertCircle,
-  Clock,
 } from 'lucide-react';
 import { useAdmin } from '../context/AdminContext';
 import { useShop } from '../context/ShopContext';
 import { AdminSection } from '../types';
-
-// Section Components
 import { DashboardSection } from './sections/DashboardSection';
 import { ProductsSection } from './sections/ProductsSection';
 import { CategoriesSection } from './sections/CategoriesSection';
@@ -40,21 +35,19 @@ export const AdminLayout: React.FC = () => {
     activeSection,
     setActiveSection,
     logout,
-    orders,
-    products,
+    dashboardOverview,
+    isSupabaseReady,
     adminToast,
     adminUser,
   } = useAdmin();
 
   const { navigateTo } = useShop();
-
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Dynamic badges for badges
-  const pendingOrdersCount = orders.filter((o) => o.status === 'Pending').length;
-  const stockAlertCount = products.filter(
-    (p) => (p.stockCount ?? 0) <= 5
-  ).length;
+  const pendingOrdersCount = dashboardOverview?.pendingOrders ?? 0;
+  const stockAlertCount =
+    (dashboardOverview?.outOfStockProducts ?? 0) +
+    (dashboardOverview?.lowStockProducts ?? 0);
 
   const navItems: {
     id: AdminSection;
@@ -63,27 +56,27 @@ export const AdminLayout: React.FC = () => {
     badge?: number;
     badgeColor?: string;
   }[] = [
-    { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutDashboard },
-    { id: 'products', label: 'Jewellery Catalog', icon: Package },
-    { id: 'categories', label: 'Collections / Taxonomy', icon: Layers },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'products', label: 'Products', icon: Package },
+    { id: 'categories', label: 'Categories', icon: Layers },
     {
       id: 'orders',
-      label: 'Order Pipeline',
+      label: 'Orders',
       icon: ShoppingBag,
       badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined,
       badgeColor: 'bg-amber-500 text-black',
     },
-    { id: 'customers', label: 'Patrons & Society', icon: Users },
+    { id: 'customers', label: 'Customers', icon: Users },
     {
       id: 'inventory',
-      label: 'Inventory & Vault',
+      label: 'Inventory',
       icon: Boxes,
       badge: stockAlertCount > 0 ? stockAlertCount : undefined,
       badgeColor: 'bg-rose-500 text-white',
     },
-    { id: 'coupons', label: 'Privilege Coupons', icon: Tag },
-    { id: 'content', label: 'Storefront Content', icon: Globe },
-    { id: 'settings', label: 'Store Settings', icon: Settings },
+    { id: 'coupons', label: 'Coupons', icon: Tag },
+    { id: 'content', label: 'Website Content', icon: Globe },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const handleNavClick = (sec: AdminSection) => {
@@ -95,6 +88,27 @@ export const AdminLayout: React.FC = () => {
   const handleReturnToStore = () => {
     navigateTo('home');
   };
+
+  const handleLogout = async () => {
+    setIsMobileMenuOpen(false);
+    await logout();
+  };
+
+  const adminInitials = (() => {
+    const source = (adminUser?.name || adminUser?.email || 'SA').trim();
+    const parts = source.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return source.slice(0, 2).toUpperCase();
+  })();
+
+  const formattedRole = adminUser?.role
+    ? adminUser.role.replace('_', ' ')
+    : 'Administrator';
+
+  const currentNavLabel =
+    navItems.find((item) => item.id === activeSection)?.label ?? 'Dashboard';
 
   return (
     <div className="min-h-screen bg-[#F4EFEB] flex flex-col font-sans text-[#1C1917]">
@@ -123,33 +137,33 @@ export const AdminLayout: React.FC = () => {
       )}
 
       <div className="flex-1 flex">
-        {/* Left Sidebar (Desktop Fixed / Sticky) */}
+        {/* Left Sidebar */}
         <aside
           className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#1C1917] text-white flex flex-col justify-between transition-transform duration-300 ease-in-out border-r border-[#292524] ${
             isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
           }`}
         >
-          {/* Sidebar Top: Wordmark */}
-          <div>
+          {/* Sidebar Top: Wordmark & Nav */}
+          <div className="flex-1 overflow-y-auto">
             <div className="h-16 px-6 border-b border-[#292524] flex items-center justify-between">
               <div>
                 <span className="font-serif-luxury text-xl tracking-[0.18em] uppercase text-white block">
                   Silver Aura
                 </span>
                 <span className="text-[10px] uppercase tracking-[0.2em] text-[#A8A29E] -mt-1 block">
-                  Studio Atelier Portal
+                  Admin Console
                 </span>
               </div>
               <button
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="md:hidden text-[#A8A29E] hover:text-white"
+                className="md:hidden text-[#A8A29E] hover:text-white cursor-pointer"
+                aria-label="Close navigation menu"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Navigation links */}
-            <nav className="p-3 space-y-1">
+            <nav className="p-3 space-y-1" aria-label="Admin sections">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeSection === item.id;
@@ -164,12 +178,14 @@ export const AdminLayout: React.FC = () => {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <Icon className={`w-4 h-4 ${isActive ? 'text-[#D6CEC5]' : 'text-[#78716C]'}`} />
+                      <Icon
+                        className={`w-4 h-4 ${isActive ? 'text-[#D6CEC5]' : 'text-[#78716C]'}`}
+                      />
                       <span>{item.label}</span>
                     </div>
                     {item.badge !== undefined && (
                       <span
-                        className={`px-1.5 py-0.2 text-[10px] font-bold rounded-xs ${
+                        className={`px-1.5 py-0.5 text-[10px] font-bold rounded-xs ${
                           item.badgeColor || 'bg-amber-500 text-black'
                         }`}
                       >
@@ -182,25 +198,25 @@ export const AdminLayout: React.FC = () => {
             </nav>
           </div>
 
-          {/* Sidebar Bottom: Return to Store & Logout */}
+          {/* Sidebar Bottom: View Storefront & Logout */}
           <div className="p-4 border-t border-[#292524] space-y-2">
             <button
               onClick={handleReturnToStore}
-              className="w-full flex items-center justify-between px-3 py-2 text-xs text-[#D6CEC5] bg-[#292524] hover:bg-[#332E2B] transition-colors rounded-xs group"
+              className="w-full flex items-center justify-between px-3 py-2 text-xs text-[#D6CEC5] bg-[#292524] hover:bg-[#332E2B] transition-colors rounded-xs group cursor-pointer"
             >
               <div className="flex items-center gap-2">
                 <ExternalLink className="w-3.5 h-3.5 text-[#A8A29E] group-hover:text-white" />
                 <span>View Storefront</span>
               </div>
-              <span className="text-[10px] uppercase tracking-wider text-[#A8A29E]">Live</span>
+              <span className="text-[10px] uppercase tracking-wider text-[#A8A29E]">Store</span>
             </button>
 
             <button
-              onClick={logout}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-300 hover:text-rose-100 hover:bg-rose-950/40 transition-colors rounded-xs"
+              onClick={() => void handleLogout()}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-300 hover:text-rose-100 hover:bg-rose-950/40 transition-colors rounded-xs cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>Log Out Admin</span>
+              <span>Logout</span>
             </button>
           </div>
         </aside>
@@ -220,29 +236,38 @@ export const AdminLayout: React.FC = () => {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setIsMobileMenuOpen(true)}
-                className="md:hidden p-2 text-[#57534E] hover:text-[#1C1917]"
+                className="md:hidden p-2 text-[#57534E] hover:text-[#1C1917] cursor-pointer"
+                aria-label="Open navigation menu"
               >
                 <Menu className="w-5 h-5" />
               </button>
               <div className="flex items-center gap-2 text-xs text-[#78716C]">
-                <span className="hidden sm:inline">Studio Admin</span>
+                <span className="hidden sm:inline">Silver Aura Admin</span>
                 <span className="hidden sm:inline text-[#D6CEC5]">/</span>
-                <span className="font-semibold text-[#1C1917] capitalize">
-                  {activeSection.replace('-', ' ')}
-                </span>
+                <span className="font-semibold text-[#1C1917]">{currentNavLabel}</span>
               </div>
             </div>
 
-            {/* Right Quick Controls */}
+            {/* Right Controls */}
             <div className="flex items-center gap-4 text-xs">
-              <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Storefront Storage Synced</span>
+              <div
+                className={`hidden lg:flex items-center gap-2 px-2.5 py-1 border text-[11px] font-medium ${
+                  isSupabaseReady
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-amber-50 border-amber-200 text-amber-800'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isSupabaseReady ? 'bg-emerald-500' : 'bg-amber-500'
+                  }`}
+                />
+                <span>{isSupabaseReady ? 'Supabase Auth Active' : 'Supabase Unconfigured'}</span>
               </div>
 
               <button
                 onClick={handleReturnToStore}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#D6CEC5] text-[#1C1917] text-xs uppercase tracking-wider font-medium hover:bg-[#F4EFEB] transition-colors"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#D6CEC5] text-[#1C1917] text-xs uppercase tracking-wider font-medium hover:bg-[#F4EFEB] transition-colors cursor-pointer"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>Customer Store</span>
@@ -250,29 +275,41 @@ export const AdminLayout: React.FC = () => {
 
               <div className="flex items-center gap-2 pl-2 border-l border-[#E8E0D5]">
                 <div className="w-8 h-8 rounded-full bg-[#1C1917] text-white flex items-center justify-center font-serif-luxury font-medium text-xs">
-                  AA
+                  {adminInitials}
                 </div>
                 <div className="hidden md:block text-left">
-                  <div className="text-xs font-semibold text-[#1C1917]">
-                    {adminUser?.name || 'Artisan Admin'}
+                  <div className="text-xs font-semibold text-[#1C1917] max-w-[160px] truncate">
+                    {adminUser?.name || adminUser?.email}
                   </div>
-                  <div className="text-[10px] text-[#78716C]">Head Curator</div>
+                  <div className="text-[10px] text-[#78716C] capitalize">{formattedRole}</div>
                 </div>
               </div>
             </div>
           </header>
 
-          {/* Section Dynamic Router */}
+          {/* Main Section Router */}
           <main className="p-4 sm:p-8 flex-1 max-w-7xl w-full mx-auto">
-            {activeSection === 'dashboard' && <DashboardSection />}
-            {activeSection === 'products' && <ProductsSection />}
-            {activeSection === 'categories' && <CategoriesSection />}
-            {activeSection === 'orders' && <OrdersSection />}
-            {activeSection === 'customers' && <CustomersSection />}
-            {activeSection === 'inventory' && <InventorySection />}
-            {activeSection === 'coupons' && <CouponsSection />}
-            {activeSection === 'content' && <WebsiteContentSection />}
-            {activeSection === 'settings' && <SettingsSection />}
+            {activeSection === 'dashboard' ? (
+              <DashboardSection />
+            ) : activeSection === 'products' ? (
+              <ProductsSection />
+            ) : activeSection === 'categories' ? (
+              <CategoriesSection />
+            ) : activeSection === 'orders' ? (
+              <OrdersSection />
+            ) : activeSection === 'customers' ? (
+              <CustomersSection />
+            ) : activeSection === 'inventory' ? (
+              <InventorySection />
+            ) : activeSection === 'coupons' ? (
+              <CouponsSection />
+            ) : activeSection === 'content' ? (
+              <WebsiteContentSection />
+            ) : activeSection === 'settings' ? (
+              <SettingsSection />
+            ) : (
+              <DashboardSection />
+            )}
           </main>
         </div>
       </div>

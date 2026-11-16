@@ -3,7 +3,16 @@ import { Truck, RefreshCw, ShieldCheck, Package, Clock, HelpCircle } from 'lucid
 import { useShop } from '../context/ShopContext';
 
 export const ShippingPolicyPage: React.FC = () => {
-  const { navigateTo } = useShop();
+  const { navigateTo, storeSettings, homepageContent } = useShop();
+
+  const currency = storeSettings.currencySymbol || storeSettings.currency || 'PKR';
+  const freeThreshold = storeSettings.freeShippingThreshold ?? 5000;
+  const standardFee = storeSettings.standardShippingCharge ?? 250;
+  const supportPhone =
+    homepageContent.contactWhatsApp ||
+    storeSettings.contactPhone ||
+    '+92 300 8291925';
+  const feeSummary = `Free over ${currency} ${freeThreshold.toLocaleString()} (Else ${currency} ${standardFee.toLocaleString()})`;
 
   return (
     <div className="bg-[#FAF8F5] min-h-screen py-12 sm:py-20">
@@ -26,7 +35,9 @@ export const ShippingPolicyPage: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="p-5 bg-white border border-[#E8E0D5] text-center space-y-2">
             <Truck className="w-5 h-5 mx-auto text-[#1C1917]" />
-            <h3 className="font-serif-luxury text-base font-semibold text-[#1C1917]">Free Over PKR 5,000</h3>
+            <h3 className="font-serif-luxury text-base font-semibold text-[#1C1917]">
+              Free Over {currency} {freeThreshold.toLocaleString()}
+            </h3>
             <p className="text-[11px] text-[#78716C]">Complimentary courier across all cities in Pakistan</p>
           </div>
           <div className="p-5 bg-white border border-[#E8E0D5] text-center space-y-2">
@@ -69,25 +80,25 @@ export const ShippingPolicyPage: React.FC = () => {
                     <td className="py-2.5 px-3 font-semibold text-[#1C1917]">Karachi (Metro)</td>
                     <td className="py-2.5 px-3">24 to 48 Hours</td>
                     <td className="py-2.5 px-3">TCS Express / Studio Rider</td>
-                    <td className="py-2.5 px-3">Free over PKR 5,000 (Else PKR 250)</td>
+                    <td className="py-2.5 px-3">{feeSummary}</td>
                   </tr>
                   <tr className="bg-[#FAF8F5]">
                     <td className="py-2.5 px-3 font-semibold text-[#1C1917]">Lahore & Islamabad / Rawalpindi</td>
                     <td className="py-2.5 px-3">2 to 3 Business Days</td>
                     <td className="py-2.5 px-3">TCS Express Overnight</td>
-                    <td className="py-2.5 px-3">Free over PKR 5,000 (Else PKR 250)</td>
+                    <td className="py-2.5 px-3">{feeSummary}</td>
                   </tr>
                   <tr>
                     <td className="py-2.5 px-3 font-semibold text-[#1C1917]">Faisalabad, Multan, Peshawar, Sialkot</td>
                     <td className="py-2.5 px-3">3 to 4 Business Days</td>
                     <td className="py-2.5 px-3">Leopard Courier / TCS</td>
-                    <td className="py-2.5 px-3">Free over PKR 5,000 (Else PKR 250)</td>
+                    <td className="py-2.5 px-3">{feeSummary}</td>
                   </tr>
                   <tr className="bg-[#FAF8F5]">
                     <td className="py-2.5 px-3 font-semibold text-[#1C1917]">Rest of Pakistan & Rural Towns</td>
                     <td className="py-2.5 px-3">3 to 5 Business Days</td>
                     <td className="py-2.5 px-3">TCS / Pakistan Post Insured</td>
-                    <td className="py-2.5 px-3">Free over PKR 5,000 (Else PKR 250)</td>
+                    <td className="py-2.5 px-3">{feeSummary}</td>
                   </tr>
                 </tbody>
               </table>
@@ -113,7 +124,7 @@ export const ShippingPolicyPage: React.FC = () => {
               Your delight is our commitment. If your ring size does not fit seamlessly, or if you prefer an alternate creation:
             </p>
             <ul className="list-disc list-inside space-y-1.5 pl-2 text-xs">
-              <li>Notify our WhatsApp concierge (+92 300 8291925) within <strong>7 days</strong> of delivery receipt.</li>
+              <li>Notify our WhatsApp concierge ({supportPhone}) within <strong>7 days</strong> of delivery receipt.</li>
               <li>Jewellery must be in unworn, brand-new condition with the original 925 security tag intact.</li>
               <li>Include the original velvet presentation box, authenticity card, and microfiber cloth.</li>
               <li>We will arrange a courier pickup or provide our Karachi atelier dispatch address. Once inspected, your replacement size is dispatched within 24 hours.</li>

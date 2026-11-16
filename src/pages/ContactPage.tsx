@@ -1,7 +1,26 @@
 import React, { useState } from 'react';
-import { Mail, Phone, MapPin, Clock, Send, CheckCircle2, MessageSquare } from 'lucide-react';
+import { Mail, MapPin, Clock, Send, CheckCircle2, MessageSquare } from 'lucide-react';
+import { useShop } from '../context/ShopContext';
 
 export const ContactPage: React.FC = () => {
+  const { homepageContent, storeSettings } = useShop();
+
+  const whatsappNumber =
+    homepageContent.contactWhatsApp ||
+    storeSettings.contactPhone ||
+    '+92 300 8291925';
+  const supportEmail =
+    homepageContent.contactEmail ||
+    storeSettings.storeEmail ||
+    'concierge@silveraura.pk';
+  const visitingHours =
+    homepageContent.visitingHours ||
+    'Monday – Saturday: 10:00 AM – 8:00 PM (PKT)';
+  const studioAddress =
+    homepageContent.contactAddress ||
+    storeSettings.storeAddress ||
+    'Suite 402, Executive Tower, Marine Drive, Clifton Block 4, Karachi, Pakistan.';
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -58,7 +77,7 @@ export const ContactPage: React.FC = () => {
                   <MessageSquare className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
                   <div>
                     <strong className="block text-[#1C1917]">WhatsApp Concierge (Fastest)</strong>
-                    <span className="text-[#78716C]">+92 300 8291925</span>
+                    <span className="text-[#78716C]">{whatsappNumber}</span>
                     <p className="text-[11px] text-[#A8A29E] mt-0.5">Average response time: under 15 minutes</p>
                   </div>
                 </div>
@@ -67,7 +86,7 @@ export const ContactPage: React.FC = () => {
                   <Mail className="w-4 h-4 text-[#78716C] shrink-0 mt-0.5" />
                   <div>
                     <strong className="block text-[#1C1917]">Email Inquiries</strong>
-                    <span className="text-[#78716C]">concierge@silveraura.pk</span>
+                    <span className="text-[#78716C]">{supportEmail}</span>
                   </div>
                 </div>
 
@@ -75,7 +94,7 @@ export const ContactPage: React.FC = () => {
                   <Clock className="w-4 h-4 text-[#78716C] shrink-0 mt-0.5" />
                   <div>
                     <strong className="block text-[#1C1917]">Atelier Working Hours</strong>
-                    <span className="text-[#78716C]">Monday – Saturday: 10:00 AM – 8:00 PM (PKT)</span>
+                    <span className="text-[#78716C]">{visitingHours}</span>
                     <span className="block text-[#A8A29E]">Sunday: Private Appointments Only</span>
                   </div>
                 </div>
@@ -83,9 +102,9 @@ export const ContactPage: React.FC = () => {
                 <div className="flex items-start gap-3">
                   <MapPin className="w-4 h-4 text-[#78716C] shrink-0 mt-0.5" />
                   <div>
-                    <strong className="block text-[#1C1917]">Karachi Flagship Atelier</strong>
+                    <strong className="block text-[#1C1917]">Flagship Atelier</strong>
                     <p className="text-[#78716C] leading-relaxed">
-                      Suite 402, Executive Tower, Marine Drive, Clifton Block 4, Karachi, Pakistan.
+                      {studioAddress}
                     </p>
                   </div>
                 </div>

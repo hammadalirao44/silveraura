@@ -67,15 +67,27 @@ export const WishlistDrawer: React.FC = () => {
             ) : (
               wishlist.map((product) => (
                 <div key={product.id} className="py-4 flex gap-4 first:pt-0">
-                  <img
-                    src={product.images[0]}
-                    alt={product.name}
-                    onClick={() => {
-                      setIsWishlistOpen(false);
-                      openProduct(product);
-                    }}
-                    className="w-20 h-24 object-cover rounded-xs bg-[#E8E0D5] shrink-0 border border-[#E8E0D5] cursor-pointer hover:opacity-90 transition-opacity"
-                  />
+                  {product.images[0] ? (
+                    <img
+                      src={product.images[0]}
+                      alt={product.name}
+                      onClick={() => {
+                        setIsWishlistOpen(false);
+                        openProduct(product);
+                      }}
+                      className="w-20 h-24 object-cover rounded-xs bg-[#E8E0D5] shrink-0 border border-[#E8E0D5] cursor-pointer hover:opacity-90 transition-opacity"
+                    />
+                  ) : (
+                    <div
+                      onClick={() => {
+                        setIsWishlistOpen(false);
+                        openProduct(product);
+                      }}
+                      className="w-20 h-24 rounded-xs bg-[#F4EFEB] shrink-0 border border-[#E8E0D5] flex items-center justify-center text-[10px] text-[#78716C] text-center p-1 cursor-pointer"
+                    >
+                      925 Silver
+                    </div>
+                  )}
                   <div className="flex-1 flex flex-col justify-between">
                     <div>
                       <div className="flex items-start justify-between gap-2">

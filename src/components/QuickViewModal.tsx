@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, ShieldCheck, Heart, ShoppingBag, Plus, Minus, ArrowRight } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
+import { formatVariantLabel } from '../services/catalogService';
 
 export const QuickViewModal: React.FC = () => {
   const {
@@ -15,24 +16,74 @@ export const QuickViewModal: React.FC = () => {
   } = useShop();
 
   const [activeImageIdx, setActiveImageIdx] = useState(0);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | undefined>(undefined);
   const [selectedSize, setSelectedSize] = useState<string | undefined>(undefined);
   const [quantity, setQuantity] = useState(1);
+
+  const activeVariants = useMemo(
+    () => (quickViewProduct?.productVariants ?? []).filter((v) => v.isActive),
+    [quickViewProduct]
+  );
+
+  useEffect(() => {
+    setActiveImageIdx(0);
+    setQuantity(1);
+    if (activeVariants.length > 0) {
+      const preferred = activeVariants.find((v) => v.stock > 0) ?? activeVariants[0];
+      setSelectedVariantId(preferred?.id);
+      setSelectedSize(undefined);
+    } else {
+      setSelectedVariantId(undefined);
+      setSelectedSize(quickViewProduct?.sizes?.[0]);
+    }
+  }, [quickViewProduct?.id, activeVariants, quickViewProduct?.sizes]);
 
   if (!quickViewProduct) return null;
 
   const product = quickViewProduct;
   const isFavorited = isInWishlist(product.id);
-  const activeSize = selectedSize || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
+  const selectedVariant =
+    activeVariants.find((v) => v.id === selectedVariantId) ?? activeVariants[0];
+  const hasVariantOptions = activeVariants.length > 0;
+  const activeOptionLabel = hasVariantOptions
+    ? formatVariantLabel(selectedVariant?.sizeLabel, selectedVariant?.colorLabel) ||
+      selectedVariant?.sku ||
+      undefined
+    : selectedSize || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
+
+  const displayedPrice =
+    hasVariantOptions && selectedVariant?.price !== null && selectedVariant?.price !== undefined
+      ? selectedVariant.price
+      : product.price;
+  const availableStock = hasVariantOptions
+    ? selectedVariant?.stock ?? 0
+    : product.stockCount;
+  const isOutOfStock = !product.inStock || availableStock <= 0;
+  const currentImage = product.images[activeImageIdx] || product.images[0] || '';
 
   const formatPKR = (num: number) => `PKR ${num.toLocaleString()}`;
 
   const handleAddToCart = () => {
-    addToCart(product, quantity, activeSize);
+    if (isOutOfStock) return;
+    addToCart(
+      product,
+      Math.min(quantity, availableStock),
+      activeOptionLabel,
+      selectedVariant?.id,
+      displayedPrice
+    );
     closeQuickView();
   };
 
   const handleBuyNow = () => {
-    buyNow(product, quantity, activeSize);
+    if (isOutOfStock) return;
+    buyNow(
+      product,
+      Math.min(quantity, availableStock),
+      activeOptionLabel,
+      selectedVariant?.id,
+      displayedPrice
+    );
     closeQuickView();
   };
 
@@ -46,23 +97,29 @@ export const QuickViewModal: React.FC = () => {
       <div className="relative bg-[#FAF8F5] border border-[#E8E0D5] shadow-2xl max-w-3xl w-full p-6 sm:p-8 z-10 max-h-[90vh] overflow-y-auto">
         <button
           onClick={closeQuickView}
-          className="absolute top-4 right-4 p-1.5 text-[#78716C] hover:text-[#1C1917] z-20"
+          className="absolute top-4 right-4 p-1.5 text-[#78716C] hover:text-[#1C1917] z-20 cursor-pointer"
           aria-label="Close preview"
         >
           <X className="w-5 h-5" />
         </button>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 items-start">
-          
           {/* Left: Gallery */}
           <div className="space-y-3">
             <div className="relative aspect-square bg-[#F4EFEB] rounded-xs overflow-hidden border border-[#E8E0D5]">
-              <img
-                src={product.images[activeImageIdx] || product.images[0]}
-                alt={product.name}
-                className="w-full h-full object-cover object-center"
-                referrerPolicy="no-referrer"
-              />
+              {currentImage ? (
+                <img
+                  src={currentImage}
+                  alt={product.name}
+                  className="w-full h-full object-cover object-center"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-[#78716C]">
+                  <span className="font-serif-luxury text-xl text-[#1C1917]">{product.name}</span>
+                  <span className="text-xs mt-1">{product.silverPurity}</span>
+                </div>
+              )}
             </div>
             {product.images.length > 1 && (
               <div className="flex gap-2">
@@ -70,8 +127,10 @@ export const QuickViewModal: React.FC = () => {
                   <button
                     key={idx}
                     onClick={() => setActiveImageIdx(idx)}
-                    className={`w-14 h-14 rounded-xs overflow-hidden border-2 transition-colors ${
-                      activeImageIdx === idx ? 'border-[#1C1917]' : 'border-[#E8E0D5] opacity-70 hover:opacity-100'
+                    className={`w-14 h-14 rounded-xs overflow-hidden border-2 transition-colors cursor-pointer ${
+                      activeImageIdx === idx
+                        ? 'border-[#1C1917]'
+                        : 'border-[#E8E0D5] opacity-70 hover:opacity-100'
                     }`}
                   >
                     <img src={img} alt="" className="w-full h-full object-cover" />
@@ -96,9 +155,9 @@ export const QuickViewModal: React.FC = () => {
 
             <div className="flex items-baseline gap-3">
               <span className="text-xl sm:text-2xl font-bold text-[#1C1917] tabular-nums">
-                {formatPKR(product.price)}
+                {formatPKR(displayedPrice)}
               </span>
-              {product.originalPrice && (
+              {product.originalPrice && product.originalPrice > displayedPrice && (
                 <span className="text-sm text-[#A8A29E] line-through tabular-nums">
                   {formatPKR(product.originalPrice)}
                 </span>
@@ -109,46 +168,97 @@ export const QuickViewModal: React.FC = () => {
               {product.description}
             </p>
 
-            {/* 925 Hallmark Guarantee Box */}
+            {/* Guarantee */}
             <div className="bg-[#F4EFEB] p-3 border border-[#E8E0D5] flex items-center gap-3 text-xs text-[#1C1917]">
               <ShieldCheck className="w-4 h-4 text-[#78716C] shrink-0" />
               <div>
                 <span className="font-semibold">{product.silverPurity}</span>
-                <span className="text-[#78716C] block">{product.plating || 'Anti-Tarnish Rhodium Finish'}</span>
+                <span className="text-[#78716C] block">
+                  {product.plating || 'Anti-Tarnish Rhodium Finish'}
+                </span>
               </div>
             </div>
 
-            {/* Size Selector if available */}
-            {product.sizes && product.sizes.length > 0 && (
+            {/* Variant / Size Selector */}
+            {hasVariantOptions ? (
               <div className="space-y-2 pt-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-[#1C1917]">Select Size</span>
+                  <span className="font-medium text-[#1C1917]">
+                    Option: <span className="text-[#57534E]">{activeOptionLabel}</span>
+                  </span>
                   <button
                     onClick={() => {
                       closeQuickView();
                       setIsSizeGuideOpen(true);
                     }}
-                    className="text-[#78716C] underline hover:text-[#1C1917]"
+                    className="text-[#78716C] underline hover:text-[#1C1917] cursor-pointer"
                   >
                     Size Guide
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {product.sizes.map((size) => (
-                    <button
-                      key={size}
-                      onClick={() => setSelectedSize(size)}
-                      className={`px-3 py-1.5 text-xs font-medium border transition-colors ${
-                        activeSize === size
-                          ? 'border-[#1C1917] bg-[#1C1917] text-[#FAF8F5]'
-                          : 'border-[#D6CEC5] bg-white text-[#1C1917] hover:border-[#1C1917]'
-                      }`}
-                    >
-                      {size}
-                    </button>
-                  ))}
+                  {activeVariants.map((variant) => {
+                    const label =
+                      formatVariantLabel(variant.sizeLabel, variant.colorLabel) ||
+                      variant.sku ||
+                      'Standard';
+                    const isSelected = selectedVariant?.id === variant.id;
+                    const variantOut = variant.stock <= 0;
+                    return (
+                      <button
+                        key={variant.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedVariantId(variant.id);
+                          setQuantity((q) => Math.max(1, Math.min(q, variant.stock || 1)));
+                        }}
+                        className={`px-3 py-1.5 text-xs font-medium border transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'border-[#1C1917] bg-[#1C1917] text-[#FAF8F5]'
+                            : variantOut
+                            ? 'border-[#E8E0D5] bg-[#F4EFEB] text-[#A8A29E] line-through'
+                            : 'border-[#D6CEC5] bg-white text-[#1C1917] hover:border-[#1C1917]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+            ) : (
+              product.sizes &&
+              product.sizes.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-[#1C1917]">Select Size</span>
+                    <button
+                      onClick={() => {
+                        closeQuickView();
+                        setIsSizeGuideOpen(true);
+                      }}
+                      className="text-[#78716C] underline hover:text-[#1C1917] cursor-pointer"
+                    >
+                      Size Guide
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {product.sizes.map((size) => (
+                      <button
+                        key={size}
+                        onClick={() => setSelectedSize(size)}
+                        className={`px-3 py-1.5 text-xs font-medium border transition-colors cursor-pointer ${
+                          activeOptionLabel === size
+                            ? 'border-[#1C1917] bg-[#1C1917] text-[#FAF8F5]'
+                            : 'border-[#D6CEC5] bg-white text-[#1C1917] hover:border-[#1C1917]'
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
             )}
 
             {/* Quantity Stepper & Buttons */}
@@ -157,15 +267,19 @@ export const QuickViewModal: React.FC = () => {
                 <div className="flex items-center border border-[#D6CEC5] bg-white">
                   <button
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                    className="p-2 text-[#78716C] hover:text-[#1C1917]"
+                    disabled={isOutOfStock}
+                    className="p-2 text-[#78716C] hover:text-[#1C1917] disabled:opacity-40 cursor-pointer"
                     aria-label="Decrease"
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
                   <span className="px-3 text-xs font-semibold tabular-nums">{quantity}</span>
                   <button
-                    onClick={() => setQuantity((q) => q + 1)}
-                    className="p-2 text-[#78716C] hover:text-[#1C1917]"
+                    onClick={() =>
+                      setQuantity((q) => Math.min(Math.max(1, availableStock), q + 1))
+                    }
+                    disabled={isOutOfStock || quantity >= availableStock}
+                    className="p-2 text-[#78716C] hover:text-[#1C1917] disabled:opacity-40 cursor-pointer"
                     aria-label="Increase"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -174,7 +288,7 @@ export const QuickViewModal: React.FC = () => {
 
                 <button
                   onClick={() => toggleWishlist(product)}
-                  className={`p-2.5 border transition-colors ${
+                  className={`p-2.5 border transition-colors cursor-pointer ${
                     isFavorited
                       ? 'border-[#1C1917] bg-[#1C1917] text-white'
                       : 'border-[#D6CEC5] bg-white text-[#78716C] hover:text-[#1C1917]'
@@ -188,14 +302,16 @@ export const QuickViewModal: React.FC = () => {
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <button
                   onClick={handleAddToCart}
-                  className="py-3 px-4 bg-[#1C1917] hover:bg-[#292524] text-[#FAF8F5] text-xs uppercase tracking-wider font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                  disabled={isOutOfStock}
+                  className="py-3 px-4 bg-[#1C1917] hover:bg-[#292524] text-[#FAF8F5] text-xs uppercase tracking-wider font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:bg-stone-400 disabled:cursor-not-allowed"
                 >
                   <ShoppingBag className="w-3.5 h-3.5" />
-                  <span>Add to Bag</span>
+                  <span>{isOutOfStock ? 'Out of Stock' : 'Add to Bag'}</span>
                 </button>
                 <button
                   onClick={handleBuyNow}
-                  className="py-3 px-4 bg-[#FAF8F5] border border-[#1C1917] text-[#1C1917] hover:bg-[#1C1917] hover:text-[#FAF8F5] text-xs uppercase tracking-wider font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                  disabled={isOutOfStock}
+                  className="py-3 px-4 bg-[#FAF8F5] border border-[#1C1917] text-[#1C1917] hover:bg-[#1C1917] hover:text-[#FAF8F5] text-xs uppercase tracking-wider font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <span>Buy Now</span>
                 </button>
@@ -206,15 +322,13 @@ export const QuickViewModal: React.FC = () => {
                   closeQuickView();
                   openProduct(product);
                 }}
-                className="w-full text-center text-xs text-[#78716C] hover:text-[#1C1917] pt-2 flex items-center justify-center gap-1"
+                className="w-full text-center text-xs text-[#78716C] hover:text-[#1C1917] pt-2 flex items-center justify-center gap-1 cursor-pointer"
               >
                 <span>View Full Product Specifications & Care</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
-
           </div>
-
         </div>
       </div>
     </div>

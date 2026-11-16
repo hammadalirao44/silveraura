@@ -3,9 +3,18 @@ import { ArrowRight, CheckCircle2, ShieldCheck, Mail } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const Footer: React.FC = () => {
-  const { navigateTo, setIsSizeGuideOpen } = useShop();
+  const { navigateTo, setIsSizeGuideOpen, categories, storeSettings, homepageContent } = useShop();
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+
+  const storeName = storeSettings.storeName || 'Silver Aura';
+  const studioAddress =
+    homepageContent.contactAddress ||
+    storeSettings.storeAddress ||
+    'Ocean Mall, Clifton, Karachi, Pakistan.';
+  const supportEmail = homepageContent.contactEmail || storeSettings.storeEmail || '';
+  const supportPhone = homepageContent.contactWhatsApp || storeSettings.contactPhone || '';
+  const societyCode = homepageContent.societyDiscountCode || 'AURA10';
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,10 +32,10 @@ export const Footer: React.FC = () => {
         <div className="border-b border-[#292524] pb-12 mb-12">
           <div className="max-w-2xl mx-auto text-center space-y-4">
             <span className="text-xs uppercase tracking-[0.25em] text-[#A8A29E] font-semibold block">
-              The Silver Aura Society
+              The {storeName} Society
             </span>
             <h3 className="font-serif-luxury text-3xl sm:text-4xl text-white font-normal">
-              Receive 10% Privilege on Your First Order
+              Receive Privilege on Your First Order
             </h3>
             <p className="text-xs sm:text-sm text-[#A8A29E] leading-relaxed max-w-lg mx-auto">
               Join our private list to receive early access to limited capsule releases, private previews, and complimentary silver care advice.
@@ -35,7 +44,9 @@ export const Footer: React.FC = () => {
             {subscribed ? (
               <div className="inline-flex items-center gap-2 px-5 py-3 bg-[#292524] text-white text-xs border border-[#44403C]">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Privilege code <strong>AURA10</strong> active! Enjoy 10% off at checkout.</span>
+                <span>
+                  Privilege code <strong>{societyCode}</strong> active! Apply at checkout if currently eligible.
+                </span>
               </div>
             ) : (
               <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto pt-2">
@@ -68,7 +79,7 @@ export const Footer: React.FC = () => {
           {/* Brand Info */}
           <div className="lg:col-span-2 space-y-4">
             <span className="font-serif-luxury text-2xl tracking-[0.14em] text-white uppercase block">
-              Silver Aura
+              {storeName}
             </span>
             <p className="text-[#A8A29E] leading-relaxed max-w-sm">
               Pakistan's premier destination for certified solid 925 sterling silver fine jewellery. Crafted with precision, triple-rhodium plated, and designed to endure for generations.
@@ -77,9 +88,14 @@ export const Footer: React.FC = () => {
               <ShieldCheck className="w-4 h-4 text-[#A8A29E]" />
               <span className="text-[11px] uppercase tracking-wider">100% Certified 925 Sterling Silver</span>
             </div>
-            <p className="text-[11px] text-[#78716C]">
-              Flagship Studio: Ocean Mall, Clifton, Karachi, Pakistan.
-            </p>
+            <div className="text-[11px] text-[#78716C] space-y-1">
+              <p>Flagship Studio: {studioAddress}</p>
+              {(supportPhone || supportEmail) && (
+                <p className="text-[#A8A29E]">
+                  {[supportPhone, supportEmail].filter(Boolean).join(' · ')}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Shop Categories */}
@@ -87,35 +103,20 @@ export const Footer: React.FC = () => {
             <h4 className="text-white text-xs uppercase tracking-widest font-semibold">Collections</h4>
             <ul className="space-y-2 text-[#A8A29E]">
               <li>
-                <button onClick={() => navigateTo('shop', 'Rings')} className="hover:text-white transition-colors">
-                  Rings & Solitaires
+                <button onClick={() => navigateTo('shop', 'All')} className="hover:text-white transition-colors cursor-pointer">
+                  All 925 Jewellery
                 </button>
               </li>
-              <li>
-                <button onClick={() => navigateTo('shop', 'Necklaces')} className="hover:text-white transition-colors">
-                  Necklaces & Chokers
-                </button>
-              </li>
-              <li>
-                <button onClick={() => navigateTo('shop', 'Earrings')} className="hover:text-white transition-colors">
-                  Earrings & Huggies
-                </button>
-              </li>
-              <li>
-                <button onClick={() => navigateTo('shop', 'Bracelets')} className="hover:text-white transition-colors">
-                  Bracelets & Tennis Links
-                </button>
-              </li>
-              <li>
-                <button onClick={() => navigateTo('shop', 'Anklets')} className="hover:text-white transition-colors">
-                  Silver Anklets
-                </button>
-              </li>
-              <li>
-                <button onClick={() => navigateTo('shop', 'Jewellery Sets')} className="hover:text-white transition-colors">
-                  Bridal Suites & Duos
-                </button>
-              </li>
+              {categories.slice(0, 6).map((cat) => (
+                <li key={cat.id}>
+                  <button
+                    onClick={() => navigateTo('shop', cat.name)}
+                    className="hover:text-white transition-colors cursor-pointer"
+                  >
+                    {cat.name}
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -203,7 +204,7 @@ export const Footer: React.FC = () => {
           </div>
 
           <p className="tabular-nums">
-            © {new Date().getFullYear()} Silver Aura Fine Jewellery. All rights reserved.
+            © {new Date().getFullYear()} {storeName} Fine Jewellery. All rights reserved.
           </p>
         </div>
 

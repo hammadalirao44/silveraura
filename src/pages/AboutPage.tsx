@@ -4,7 +4,12 @@ import { CRAFTSMANSHIP_IMAGE, HERO_IMAGE } from '../data/products';
 import { useShop } from '../context/ShopContext';
 
 export const AboutPage: React.FC = () => {
-  const { navigateTo } = useShop();
+  const { navigateTo, homepageContent, storeSettings } = useShop();
+  const storeName = storeSettings.storeName || 'Silver Aura';
+  const aboutNarrative =
+    homepageContent.aboutText ||
+    homepageContent.brandStorySnippet ||
+    `${storeName} was founded with a singular ambition: to craft authentic solid 925 sterling silver fine jewellery that rivals European luxury houses, tailored for modern aesthetics in Pakistan.`;
 
   return (
     <div className="bg-[#FAF8F5] min-h-screen py-12 sm:py-20">
@@ -20,7 +25,7 @@ export const AboutPage: React.FC = () => {
             <span className="italic font-light">to International Standards.</span>
           </h1>
           <p className="text-sm sm:text-base text-[#57534E] leading-relaxed max-w-xl mx-auto">
-            Silver Aura was founded with a singular ambition: to craft authentic solid 925 sterling silver fine jewellery that rivals European luxury houses, tailored for modern aesthetics in Pakistan.
+            {aboutNarrative}
           </p>
         </div>
 

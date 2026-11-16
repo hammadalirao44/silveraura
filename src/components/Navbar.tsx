@@ -4,7 +4,10 @@ import { useShop } from '../context/ShopContext';
 
 export const Navbar: React.FC = () => {
   const {
+    categories,
+    storeSettings,
     activePage,
+    selectedCategory,
     navigateTo,
     cartCount,
     wishlist,
@@ -14,8 +17,13 @@ export const Navbar: React.FC = () => {
     setSearchQuery,
   } = useShop();
 
+  const storeName = storeSettings.storeName || 'Silver Aura';
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // Keep desktop nav single-line & uncrowded (up to 4 featured active categories + All Jewellery + Atelier)
+  const desktopCategories = categories.slice(0, 4);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +37,6 @@ export const Navbar: React.FC = () => {
     <header className="sticky top-0 z-30 bg-[#FAF8F5]/95 backdrop-blur-md border-b border-[#E8E0D5] transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-8 h-20">
-          
           {/* Mobile Menu Button */}
           <div className="flex md:hidden items-center">
             <button
@@ -41,53 +48,46 @@ export const Navbar: React.FC = () => {
             </button>
           </div>
 
-          {/* Zone 1: Brand Wordmark (Single Text Element) */}
+          {/* Zone 1: Brand Wordmark */}
           <button
             onClick={() => navigateTo('home')}
             className="text-left group cursor-pointer"
           >
             <span className="font-serif-luxury text-2xl sm:text-3xl font-medium tracking-[0.12em] text-[#1C1917] uppercase group-hover:text-[#44403C] transition-colors whitespace-nowrap">
-              Silver Aura
+              {storeName}
             </span>
           </button>
 
-          {/* Zone 2: 4–5 Single-Line Concise Nav Links */}
-          <nav className="hidden md:flex items-center gap-8 text-[13px] font-medium tracking-wider uppercase text-[#44403C]">
+          {/* Zone 2: Dynamic Single-Line Nav Links */}
+          <nav className="hidden md:flex items-center gap-7 text-[13px] font-medium tracking-wider uppercase text-[#44403C]">
             <button
               onClick={() => navigateTo('shop', 'All')}
-              className={`hover:text-[#1C1917] transition-colors pb-1 relative ${
-                activePage === 'shop' ? 'text-[#1C1917] font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-[#1C1917]' : ''
+              className={`hover:text-[#1C1917] transition-colors pb-1 relative whitespace-nowrap cursor-pointer ${
+                activePage === 'shop' && selectedCategory === 'All'
+                  ? 'text-[#1C1917] font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-[#1C1917]'
+                  : ''
               }`}
             >
               All Jewellery
             </button>
-            <button
-              onClick={() => navigateTo('shop', 'Rings')}
-              className="hover:text-[#1C1917] transition-colors pb-1"
-            >
-              Rings
-            </button>
-            <button
-              onClick={() => navigateTo('shop', 'Necklaces')}
-              className="hover:text-[#1C1917] transition-colors pb-1"
-            >
-              Necklaces
-            </button>
-            <button
-              onClick={() => navigateTo('shop', 'Earrings')}
-              className="hover:text-[#1C1917] transition-colors pb-1"
-            >
-              Earrings
-            </button>
-            <button
-              onClick={() => navigateTo('shop', 'Jewellery Sets')}
-              className="hover:text-[#1C1917] transition-colors pb-1"
-            >
-              Suites
-            </button>
+
+            {desktopCategories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => navigateTo('shop', cat.name)}
+                className={`hover:text-[#1C1917] transition-colors pb-1 relative whitespace-nowrap cursor-pointer ${
+                  activePage === 'shop' && selectedCategory === cat.name
+                    ? 'text-[#1C1917] font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-[#1C1917]'
+                    : ''
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+
             <button
               onClick={() => navigateTo('about')}
-              className={`hover:text-[#1C1917] transition-colors pb-1 ${
+              className={`hover:text-[#1C1917] transition-colors pb-1 whitespace-nowrap cursor-pointer ${
                 activePage === 'about' ? 'text-[#1C1917] font-semibold' : ''
               }`}
             >
@@ -95,24 +95,22 @@ export const Navbar: React.FC = () => {
             </button>
           </nav>
 
-          {/* Zone 3: 1 Primary Action Cluster */}
+          {/* Zone 3: Primary Action Cluster */}
           <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-            {/* Search Toggle */}
             <div className="relative">
               <button
                 onClick={() => setSearchOpen(!searchOpen)}
                 aria-label="Search collection"
-                className="p-2 text-[#1C1917] hover:text-[#78716C] transition-colors"
+                className="p-2 text-[#1C1917] hover:text-[#78716C] transition-colors cursor-pointer"
               >
                 <Search className="w-5 h-5 stroke-[1.75]" />
               </button>
             </div>
 
-            {/* Wishlist Button */}
             <button
               onClick={() => setIsWishlistOpen(true)}
               aria-label={`Wishlist with ${wishlist.length} items`}
-              className="p-2 text-[#1C1917] hover:text-[#78716C] transition-colors relative"
+              className="p-2 text-[#1C1917] hover:text-[#78716C] transition-colors relative cursor-pointer"
             >
               <Heart className="w-5 h-5 stroke-[1.75]" />
               {wishlist.length > 0 && (
@@ -122,14 +120,15 @@ export const Navbar: React.FC = () => {
               )}
             </button>
 
-            {/* Shopping Bag Button */}
             <button
               onClick={() => setIsCartOpen(true)}
               aria-label={`Shopping bag with ${cartCount} items`}
-              className="flex items-center gap-2 py-2 px-3 bg-[#1C1917] text-[#FAF8F5] hover:bg-[#292524] transition-colors rounded-sm"
+              className="flex items-center gap-2 py-2 px-3 bg-[#1C1917] text-[#FAF8F5] hover:bg-[#292524] transition-colors rounded-sm cursor-pointer"
             >
               <ShoppingBag className="w-4 h-4 stroke-[2]" />
-              <span className="text-xs tracking-wider uppercase font-medium hidden sm:inline">Bag</span>
+              <span className="text-xs tracking-wider uppercase font-medium hidden sm:inline">
+                Bag
+              </span>
               <span className="text-xs font-semibold tabular-nums px-1.5 py-0.2 bg-[#FAF8F5]/20 rounded-xs">
                 {cartCount}
               </span>
@@ -144,7 +143,7 @@ export const Navbar: React.FC = () => {
               <div className="relative flex-1">
                 <input
                   type="text"
-                  placeholder="Search rings, necklaces, 925 sterling silver..."
+                  placeholder="Search rings, necklaces, SKU, 925 sterling silver..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   autoFocus
@@ -162,7 +161,7 @@ export const Navbar: React.FC = () => {
               </div>
               <button
                 type="submit"
-                className="px-5 py-2.5 bg-[#1C1917] text-white text-xs uppercase tracking-wider font-medium hover:bg-[#292524] transition-colors"
+                className="px-5 py-2.5 bg-[#1C1917] text-white text-xs uppercase tracking-wider font-medium hover:bg-[#292524] transition-colors cursor-pointer"
               >
                 Search
               </button>
@@ -178,11 +177,11 @@ export const Navbar: React.FC = () => {
             className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="relative ml-auto w-full max-w-xs bg-[#FAF8F5] h-full shadow-2xl p-6 flex flex-col justify-between z-10">
+          <div className="relative ml-auto w-full max-w-xs bg-[#FAF8F5] h-full shadow-2xl p-6 flex flex-col justify-between z-10 overflow-y-auto">
             <div>
               <div className="flex items-center justify-between pb-6 border-b border-[#E8E0D5]">
                 <span className="font-serif-luxury text-xl tracking-[0.1em] text-[#1C1917] uppercase">
-                  Silver Aura
+                  {storeName}
                 </span>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
@@ -193,7 +192,7 @@ export const Navbar: React.FC = () => {
                 </button>
               </div>
 
-              <div className="py-6 space-y-4">
+              <div className="py-6 space-y-3">
                 <button
                   onClick={() => {
                     navigateTo('shop', 'All');
@@ -204,60 +203,22 @@ export const Navbar: React.FC = () => {
                   <span>All Jewellery</span>
                   <ArrowRight className="w-4 h-4 text-[#A8A29E]" />
                 </button>
-                <button
-                  onClick={() => {
-                    navigateTo('shop', 'Rings');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full text-left py-2 text-sm text-[#44403C] hover:text-[#1C1917]"
-                >
-                  Rings
-                </button>
-                <button
-                  onClick={() => {
-                    navigateTo('shop', 'Necklaces');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full text-left py-2 text-sm text-[#44403C] hover:text-[#1C1917]"
-                >
-                  Necklaces & Pendants
-                </button>
-                <button
-                  onClick={() => {
-                    navigateTo('shop', 'Earrings');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full text-left py-2 text-sm text-[#44403C] hover:text-[#1C1917]"
-                >
-                  Earrings & Huggies
-                </button>
-                <button
-                  onClick={() => {
-                    navigateTo('shop', 'Bracelets');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full text-left py-2 text-sm text-[#44403C] hover:text-[#1C1917]"
-                >
-                  Bracelets & Bangles
-                </button>
-                <button
-                  onClick={() => {
-                    navigateTo('shop', 'Anklets');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full text-left py-2 text-sm text-[#44403C] hover:text-[#1C1917]"
-                >
-                  Anklets
-                </button>
-                <button
-                  onClick={() => {
-                    navigateTo('shop', 'Jewellery Sets');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full text-left py-2 text-sm text-[#44403C] hover:text-[#1C1917]"
-                >
-                  Bridal & Gift Sets
-                </button>
+
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => {
+                      navigateTo('shop', cat.name);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full text-left py-2 text-sm text-[#44403C] hover:text-[#1C1917] flex items-center justify-between"
+                  >
+                    <span>{cat.name}</span>
+                    {cat.count > 0 && (
+                      <span className="text-[11px] text-[#A8A29E]">{cat.count}</span>
+                    )}
+                  </button>
+                ))}
               </div>
 
               <div className="pt-4 border-t border-[#E8E0D5] space-y-2">

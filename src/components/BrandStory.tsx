@@ -4,7 +4,11 @@ import { CRAFTSMANSHIP_IMAGE } from '../data/products';
 import { useShop } from '../context/ShopContext';
 
 export const BrandStory: React.FC = () => {
-  const { navigateTo } = useShop();
+  const { navigateTo, homepageContent } = useShop();
+  const storyCopy =
+    homepageContent.aboutText ||
+    homepageContent.brandStorySnippet ||
+    'Silver Aura was conceived to revive true artisanal fine silver. In a market flooded with brass, low-grade alloys, and fleeting costume jewelry, we craft exclusively in solid 925 sterling silver — 92.5% pure elemental silver paired with 7.5% strengthened copper for timeless heirloom durability.';
 
   return (
     <section className="py-16 sm:py-24 bg-[#F4EFEB] border-y border-[#E8E0D5]">
@@ -46,7 +50,7 @@ export const BrandStory: React.FC = () => {
             </div>
 
             <p className="text-sm text-[#57534E] leading-relaxed">
-              Silver Aura was conceived to revive true artisanal fine silver. In a market flooded with brass, low-grade alloys, and fleeting costume jewelry, we craft exclusively in solid 925 sterling silver — 92.5% pure elemental silver paired with 7.5% strengthened copper for timeless heirloom durability.
+              {storyCopy}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
