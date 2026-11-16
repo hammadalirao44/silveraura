@@ -1,10 +1,19 @@
 import React from 'react';
 import { ArrowRight, ShieldCheck, Sparkles, Truck, RefreshCw } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
+import { useAdmin } from '../context/AdminContext';
 import { HERO_IMAGE } from '../data/products';
 
 export const Hero: React.FC = () => {
   const { navigateTo } = useShop();
+  const { websiteContent } = useAdmin();
+
+  const heroImageSrc = websiteContent?.heroImage || HERO_IMAGE;
+  const heroEyebrow = websiteContent?.heroSubtitle || '925 Sterling Silver Atelier';
+  const heroTitle = websiteContent?.heroTitle || 'Pure Silver, Timeless Allure.';
+  const heroDesc = websiteContent?.heroDescription || 'Sculpted from certified 925 sterling silver and finished with mirror rhodium plating. Designed for effortless modern living, from Karachi evenings to everyday rituals.';
+  const primaryCta = websiteContent?.heroCtaText || 'Shop Collection';
+  const secondaryCta = websiteContent?.heroSecondaryCtaText || 'Bridal & Gift Sets';
 
   return (
     <section className="relative overflow-hidden bg-[#FAF8F5]">
@@ -16,17 +25,15 @@ export const Hero: React.FC = () => {
           <div className="lg:col-span-5 flex flex-col justify-center space-y-6 z-10">
             <div className="space-y-2">
               <span className="text-xs uppercase tracking-[0.25em] text-[#78716C] font-semibold block">
-                925 Sterling Silver Atelier
+                {heroEyebrow}
               </span>
               <h1 className="font-serif-luxury text-4xl sm:text-5xl lg:text-6xl text-[#1C1917] font-normal leading-[1.08] tracking-tight text-balance">
-                Pure Silver, <br />
-                <span className="italic font-light">Timeless Allure.</span>
+                {heroTitle}
               </h1>
             </div>
 
             <p className="text-sm sm:text-base text-[#57534E] leading-relaxed max-w-lg">
-              Sculpted from certified 925 sterling silver and finished with mirror rhodium plating. 
-              Designed for effortless modern living, from Karachi evenings to everyday rituals.
+              {heroDesc}
             </p>
 
             <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
@@ -34,7 +41,7 @@ export const Hero: React.FC = () => {
                 onClick={() => navigateTo('shop', 'All')}
                 className="py-3.5 px-8 bg-[#1C1917] text-[#FAF8F5] text-xs uppercase tracking-[0.16em] font-medium hover:bg-[#292524] transition-all flex items-center justify-center gap-2 group cursor-pointer shadow-sm"
               >
-                <span>Shop Collection</span>
+                <span>{primaryCta}</span>
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </button>
 
@@ -42,7 +49,7 @@ export const Hero: React.FC = () => {
                 onClick={() => navigateTo('shop', 'Jewellery Sets')}
                 className="py-3.5 px-6 border border-[#D6CEC5] text-[#1C1917] text-xs uppercase tracking-[0.16em] font-medium hover:bg-[#F4EFEB] transition-colors flex items-center justify-center cursor-pointer"
               >
-                Bridal & Gift Sets
+                {secondaryCta}
               </button>
             </div>
 
@@ -68,7 +75,7 @@ export const Hero: React.FC = () => {
           <div className="lg:col-span-7 relative">
             <div className="relative aspect-[16/10] sm:aspect-[16/9] lg:aspect-[4/3] rounded-sm overflow-hidden bg-[#E8E0D5] shadow-lg">
               <img
-                src={HERO_IMAGE}
+                src={heroImageSrc}
                 alt="Silver Aura certified 925 sterling silver statement jewellery resting on natural travertine stone"
                 className="w-full h-full object-cover object-center transform hover:scale-[1.01] transition-transform duration-700"
                 referrerPolicy="no-referrer"

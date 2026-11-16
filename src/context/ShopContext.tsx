@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Product, CartItem, ActivePage, OrderDetails } from '../types';
+import { Product, CartItem, ActivePage, OrderDetails, Coupon, StoreSettings } from '../types';
 import { PRODUCTS } from '../data/products';
+import { INITIAL_STORE_SETTINGS } from '../data/adminSeedData';
 
 interface ShopContextType {
   products: Product[];
@@ -69,16 +70,53 @@ interface ShopContextType {
   // Toast
   toast: { message: string; visible: boolean } | null;
   showToast: (message: string) => void;
+
+  // Refresh products from localStorage
+  reloadProductsFromStorage: () => void;
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
-const FREE_SHIPPING_THRESHOLD = 5000;
-const STANDARD_SHIPPING_FEE = 250;
-
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [products] = useState<Product[]>(PRODUCTS);
-  const [activePage, setActivePage] = useState<ActivePage>('home');
+  // Sync products with localStorage
+  const loadInitialProducts = (): Product[] => {
+    try {
+      const saved = localStorage.getItem('silver_aura_products');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Filter only active products for storefront (or all if status not set)
+          return parsed.filter((p: Product) => p.status !== 'inactive');
+        }
+      }
+    } catch {}
+    return PRODUCTS;
+  };
+
+  const [products, setProducts] = useState<Product[]>(loadInitialProducts);
+
+  const reloadProductsFromStorage = () => {
+    setProducts(loadInitialProducts());
+  };
+
+  // Sync settings
+  const [storeSettings] = useState<StoreSettings>(() => {
+    try {
+      const saved = localStorage.getItem('silver_aura_settings');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_STORE_SETTINGS;
+  });
+
+  const [activePage, setActivePage] = useState<ActivePage>(() => {
+    const hash = window.location.hash.toLowerCase();
+    const path = window.location.pathname.toLowerCase();
+    if (path.startsWith('/admin') || hash.startsWith('#admin')) {
+      return 'admin';
+    }
+    return 'home';
+  });
+
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
@@ -97,6 +135,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Promo code
   const [promoCode, setPromoCode] = useState('');
   const [discountPercent, setDiscountPercent] = useState(0);
+  const [discountFixed, setDiscountFixed] = useState(0);
   const [lastOrder, setLastOrder] = useState<OrderDetails | null>(null);
 
   // Toast
@@ -117,7 +156,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // fallback
     }
-    // Initial starter item for delightful first-load experience
     return [
       {
         product: PRODUCTS[0],
@@ -156,15 +194,34 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [wishlist]);
 
+  // Watch for storage changes across tabs or admin actions
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'silver_aura_products') {
+        reloadProductsFromStorage();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
   // Handle URL hash routing or deep linking
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '').toLowerCase();
-      if (['home', 'shop', 'about', 'contact', 'faq', 'shipping'].includes(hash)) {
-        setActivePage(hash as ActivePage);
+      const hash = window.location.hash.toLowerCase();
+      const path = window.location.pathname.toLowerCase();
+
+      if (path.startsWith('/admin') || hash.startsWith('#admin')) {
+        setActivePage('admin');
+        return;
+      }
+
+      const cleanHash = hash.replace('#', '');
+      if (['home', 'shop', 'about', 'contact', 'faq', 'shipping'].includes(cleanHash)) {
+        setActivePage(cleanHash as ActivePage);
         window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else if (hash.startsWith('category-')) {
-        const cat = hash.replace('category-', '');
+      } else if (cleanHash.startsWith('category-')) {
+        const cat = cleanHash.replace('category-', '');
         const matched = ['Rings', 'Necklaces', 'Earrings', 'Bracelets', 'Anklets', 'Jewellery Sets'].find(
           c => c.toLowerCase().replace(/\s+/g, '-') === cat
         );
@@ -173,8 +230,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setActivePage('shop');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-      } else if (hash.startsWith('product-')) {
-        const prodId = hash.replace('product-', '');
+      } else if (cleanHash.startsWith('product-')) {
+        const prodId = cleanHash.replace('product-', '');
         const found = products.find(p => p.id === prodId);
         if (found) {
           setSelectedProduct(found);
@@ -194,8 +251,12 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSelectedCategory(category);
     }
     setActivePage(page);
-    window.location.hash = page === 'home' ? '' : page;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (page === 'admin') {
+      window.location.hash = 'admin/dashboard';
+    } else {
+      window.location.hash = page === 'home' ? '' : page;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const openProduct = (product: Product) => {
@@ -294,16 +355,52 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInStockOnly(false);
   };
 
+  // Synchronized dynamic coupon verification
   const applyPromoCode = (code: string) => {
     const clean = code.trim().toUpperCase();
+
+    // Check localStorage coupons first
+    try {
+      const storedCoupons = localStorage.getItem('silver_aura_coupons');
+      if (storedCoupons) {
+        const parsed: Coupon[] = JSON.parse(storedCoupons);
+        const match = parsed.find(c => c.code === clean && c.status === 'Active');
+        if (match) {
+          if (cartSubtotal < match.minOrderAmount) {
+            return {
+              success: false,
+              message: `Minimum order of PKR ${match.minOrderAmount.toLocaleString()} required for ${clean}`,
+            };
+          }
+
+          if (match.type === 'percentage') {
+            setPromoCode(clean);
+            setDiscountPercent(match.value);
+            setDiscountFixed(0);
+            showToast(`${match.value}% Privilege Code Applied!`);
+            return { success: true, message: `${match.value}% discount successfully applied!` };
+          } else {
+            setPromoCode(clean);
+            setDiscountPercent(0);
+            setDiscountFixed(match.value);
+            showToast(`PKR ${match.value.toLocaleString()} Privilege Applied!`);
+            return { success: true, message: `PKR ${match.value.toLocaleString()} discount applied!` };
+          }
+        }
+      }
+    } catch {}
+
+    // Fallbacks
     if (clean === 'AURA10') {
       setPromoCode('AURA10');
       setDiscountPercent(10);
+      setDiscountFixed(0);
       showToast('10% Welcome Luxury Privilege Applied!');
       return { success: true, message: '10% discount successfully applied!' };
     } else if (clean === 'SILVER925') {
       setPromoCode('SILVER925');
       setDiscountPercent(15);
+      setDiscountFixed(0);
       showToast('15% 925 Club Privilege Applied!');
       return { success: true, message: '15% discount applied!' };
     } else {
@@ -312,17 +409,38 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const completeOrder = (order: OrderDetails) => {
-    setLastOrder(order);
+    const fullOrder: OrderDetails = {
+      ...order,
+      status: 'Pending',
+    };
+    setLastOrder(fullOrder);
     clearCart();
+
+    // Persist into admin orders
+    try {
+      const existing = localStorage.getItem('silver_aura_orders');
+      const orderList: OrderDetails[] = existing ? JSON.parse(existing) : [];
+      localStorage.setItem('silver_aura_orders', JSON.stringify([fullOrder, ...orderList]));
+    } catch (e) {
+      console.warn('Failed to save order to localStorage', e);
+    }
+
+    // Dispatch event so AdminContext catches it immediately
+    window.dispatchEvent(new CustomEvent('silver_aura_new_order', { detail: fullOrder }));
   };
 
-  // Calculations
+  // Calculations with store settings
+  const freeShippingThreshold = storeSettings.freeShippingThreshold || 5000;
+  const standardShippingFee = storeSettings.standardShippingCharge || 250;
+
   const cartSubtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const cartDiscountAmount = Math.round((cartSubtotal * discountPercent) / 100);
-  const cartShipping = cartSubtotal >= FREE_SHIPPING_THRESHOLD || cartSubtotal === 0 ? 0 : STANDARD_SHIPPING_FEE;
+  const cartDiscountAmount = discountFixed > 0
+    ? discountFixed
+    : Math.round((cartSubtotal * discountPercent) / 100);
+  const cartShipping = cartSubtotal >= freeShippingThreshold || cartSubtotal === 0 ? 0 : standardShippingFee;
   const cartTotal = Math.max(0, cartSubtotal - cartDiscountAmount + cartShipping);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const freeShippingRemaining = Math.max(0, FREE_SHIPPING_THRESHOLD - cartSubtotal);
+  const freeShippingRemaining = Math.max(0, freeShippingThreshold - cartSubtotal);
 
   return (
     <ShopContext.Provider
@@ -375,10 +493,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         cartDiscountAmount,
         cartTotal,
         cartCount,
-        freeShippingThreshold: FREE_SHIPPING_THRESHOLD,
+        freeShippingThreshold,
         freeShippingRemaining,
         toast,
         showToast,
+        reloadProductsFromStorage,
       }}
     >
       {children}

@@ -175,6 +175,15 @@ export const Footer: React.FC = () => {
                   Bespoke Bridal Consultations
                 </button>
               </li>
+              <li className="pt-1">
+                <button
+                  onClick={() => navigateTo('admin')}
+                  className="text-stone-400 hover:text-white transition-colors flex items-center gap-1.5"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-stone-500" />
+                  <span>Studio Admin Portal</span>
+                </button>
+              </li>
             </ul>
           </div>
 

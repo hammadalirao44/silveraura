@@ -1,5 +1,6 @@
 import React from 'react';
 import { ShopProvider, useShop } from './context/ShopContext';
+import { AdminProvider, useAdmin } from './context/AdminContext';
 import { AnnouncementBar } from './components/AnnouncementBar';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
@@ -22,9 +23,22 @@ import { ContactPage } from './pages/ContactPage';
 import { FAQPage } from './pages/FAQPage';
 import { ShippingPolicyPage } from './pages/ShippingPolicyPage';
 
-const AppContent: React.FC = () => {
-  const { activePage } = useShop();
+import { AdminLoginPage } from './admin/AdminLoginPage';
+import { AdminLayout } from './admin/AdminLayout';
 
+const MainAppRouter: React.FC = () => {
+  const { activePage } = useShop();
+  const { isAuthenticated } = useAdmin();
+
+  // If currently routed to Admin Portal
+  if (activePage === 'admin') {
+    if (!isAuthenticated) {
+      return <AdminLoginPage />;
+    }
+    return <AdminLayout />;
+  }
+
+  // Customer-Facing Storefront
   return (
     <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-[#1C1917]">
       {/* Top Announcement Bar */}
@@ -69,8 +83,10 @@ const AppContent: React.FC = () => {
 
 export default function App() {
   return (
-    <ShopProvider>
-      <AppContent />
-    </ShopProvider>
+    <AdminProvider>
+      <ShopProvider>
+        <MainAppRouter />
+      </ShopProvider>
+    </AdminProvider>
   );
 }
