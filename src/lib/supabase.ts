@@ -1,9 +1,16 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../types/database';
 
-const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || '';
+declare global {
+  interface ImportMetaEnv {
+    readonly SUPABASE_URL?: string;
+    readonly NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string;
+  }
+}
+
+const supabaseUrl = (import.meta.env.SUPABASE_URL as string | undefined)?.trim() || '';
 const supabasePublishableKey =
-  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() || '';
+  (import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() || '';
 
 const isPlaceholderUrl =
   !supabaseUrl ||
@@ -17,7 +24,7 @@ const isPlaceholderKey =
 export const isSupabaseConfigured = !isPlaceholderUrl && !isPlaceholderKey;
 
 export const supabaseConfigError: string | null = !isSupabaseConfigured
-  ? 'Supabase environment variables (VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY) are not configured.'
+  ? 'Supabase environment variables (SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) are not configured.'
   : null;
 
 export const supabase: SupabaseClient<Database> | null = isSupabaseConfigured
@@ -35,7 +42,7 @@ export function getSupabaseClient(): SupabaseClient<Database> {
   if (!supabase) {
     throw new Error(
       supabaseConfigError ||
-        'Supabase client is not initialized. Check VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.'
+        'Supabase client is not initialized. Check SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.'
     );
   }
   return supabase;
